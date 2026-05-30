@@ -1,0 +1,26 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# 环境变量（含密钥）
+.env
+
+# 打包产物
+*.tar
+
+# 数据文件（本地数据库、图片等）
+data/*.db
+data/images/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Qwen Code 配置
+.qwen/
