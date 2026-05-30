@@ -1,8 +1,13 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 # 项目根目录
 BASE_DIR = Path(__file__).parent
+
+# 加载 .env 文件（override=True 确保 .env 优先于系统环境变量）
+load_dotenv(BASE_DIR / ".env", override=True)
 
 # 数据库路径
 DB_PATH = BASE_DIR / "data" / "bills.db"

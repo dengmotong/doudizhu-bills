@@ -1,3 +1,4 @@
+import os
 import re
 import uuid
 from datetime import date
@@ -6,7 +7,7 @@ from pathlib import Path
 import streamlit as st
 from PIL import Image
 
-from config import BASE_DIR
+from config import BASE_DIR, OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL
 from database import get_all_players, add_player, add_bills, add_game_session
 from llm import recognize_bill
 
@@ -71,34 +72,92 @@ def save_one_result(uploaded_file, result, edited_players, game_date, game_time,
 st.set_page_config(page_title="账单上传", page_icon="📤", layout="wide")
 st.title("📤 账单上传")
 
-# API 配置
-with st.expander("⚙️ API 配置", expanded=not bool(__import__("os").environ.get("OPENAI_API_KEY", ""))):
-    api_key = st.text_input(
-        "API Key",
-        value=st.session_state.get("api_key", ""),
-        type="password",
-        help="API 密钥",
-    )
-    if api_key:
-        st.session_state["api_key"] = api_key
+# 保存 config.py 的默认值
+DEFAULT_KEY = OPENAI_API_KEY
+DEFAULT_URL = OPENAI_BASE_URL
+DEFAULT_MODEL = OPENAI_MODEL
 
-    base_url = st.text_input(
-        "Base URL",
-        value=st.session_state.get("base_url", ""),
-        placeholder="https://api.example.com/v1",
-        help="API 地址，例如 https://api.mimo.xxx/v1",
-    )
-    if base_url:
-        st.session_state["base_url"] = base_url
+# 读取当前配置（优先使用用户配置，否则使用默认值）
+def get_config():
+    return {
+        "api_key": st.session_state.get("api_key", DEFAULT_KEY),
+        "base_url": st.session_state.get("base_url", DEFAULT_URL),
+        "model": st.session_state.get("model", DEFAULT_MODEL),
+    }
 
-    model = st.text_input(
-        "模型名",
-        value=st.session_state.get("model", ""),
-        placeholder="mimo-v2-omni",
-        help="多模态模型名称",
-    )
-    if model:
-        st.session_state["model"] = model
+def mask_key(key: str) -> str:
+    if not key:
+        return ""
+    if len(key) <= 15:
+        return key[:4] + "****" + key[-4:] if len(key) > 8 else "****"
+    return key[:10] + "****" + key[-5:]
+
+# 初始化配置
+if "api_key" not in st.session_state:
+    st.session_state["api_key"] = DEFAULT_KEY
+if "base_url" not in st.session_state:
+    st.session_state["base_url"] = DEFAULT_URL
+if "model" not in st.session_state:
+    st.session_state["model"] = DEFAULT_MODEL
+
+# API Key: 按钮切换编辑/查看模式
+if "_key_editing" not in st.session_state:
+    st.session_state["_key_editing"] = False
+
+# 标题行
+col_h1, col_h2, col_h3 = st.columns([3, 3, 2])
+with col_h1:
+    st.markdown("**API Key**")
+with col_h2:
+    st.markdown("**Base URL**")
+with col_h3:
+    st.markdown("**模型**")
+
+# 自动保存回调函数
+def save_key():
+    val = st.session_state.get("_cfg_key", "").strip()
+    if val:
+        st.session_state["api_key"] = val
+        st.session_state["_key_editing"] = False
+
+def save_url():
+    val = st.session_state.get("_cfg_url", "").strip()
+    if val:
+        st.session_state["base_url"] = val
+
+def save_model():
+    val = st.session_state.get("_cfg_model", "").strip()
+    if val:
+        st.session_state["model"] = val
+
+col_key, col_url, col_model = st.columns([3, 3, 2])
+
+with col_key:
+    col_btn, col_input = st.columns([1, 5])
+    with col_btn:
+        if st.button("✏️", key="_key_edit_btn"):
+            st.session_state["_key_editing"] = not st.session_state["_key_editing"]
+            st.rerun()
+
+    with col_input:
+        if st.session_state["_key_editing"]:
+            st.text_input("输入新 Key", value="",
+                          placeholder="请输入完整 API Key", label_visibility="collapsed",
+                          key="_cfg_key", on_change=save_key)
+        else:
+            display_key = mask_key(st.session_state["api_key"]) if st.session_state["api_key"] else "未配置"
+            st.text_input("当前 Key", value=display_key,
+                          disabled=True, label_visibility="collapsed")
+
+with col_url:
+    st.text_input("Base URL", value=st.session_state["base_url"],
+                  key="_cfg_url", label_visibility="collapsed",
+                  on_change=save_url)
+
+with col_model:
+    st.text_input("模型", value=st.session_state["model"],
+                  key="_cfg_model", label_visibility="collapsed",
+                  on_change=save_model)
 
 st.markdown("---")
 
@@ -153,9 +212,9 @@ if recognizing_items:
             image = Image.open(uf)
             result = recognize_bill(
                 image,
-                api_key=st.session_state.get("api_key", ""),
-                base_url=st.session_state.get("base_url", ""),
-                model=st.session_state.get("model", ""),
+                api_key=st.session_state.get("api_key", DEFAULT_KEY),
+                base_url=st.session_state.get("base_url", DEFAULT_URL),
+                model=st.session_state.get("model", DEFAULT_MODEL),
             )
             item["result"] = result
             item["fn_date"], item["fn_time"] = parse_filename_datetime(uf.name)
