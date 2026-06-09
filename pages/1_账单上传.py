@@ -1,7 +1,9 @@
 import os
 import re
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
+from io import BytesIO
 from pathlib import Path
 
 import streamlit as st
@@ -31,7 +33,25 @@ def validate_session_zero(players: list[dict]) -> tuple[bool, float]:
     return abs(total) < 0.01, total
 
 
+def merge_duplicate_players(players: list[dict]) -> list[dict]:
+    seen = {}
+    for p in players:
+        name = p.get("name", "")
+        if not name:
+            continue
+        if name in seen:
+            seen[name]["win_points"] = seen[name].get("win_points", 0) + p.get("win_points", 0)
+            seen[name]["landlord_count"] = seen[name].get("landlord_count", 0) + p.get("landlord_count", 0)
+            seen[name]["landlord_win"] = seen[name].get("landlord_win", 0) + p.get("landlord_win", 0)
+            seen[name]["farmer_count"] = seen[name].get("farmer_count", 0) + p.get("farmer_count", 0)
+            seen[name]["farmer_win"] = seen[name].get("farmer_win", 0) + p.get("farmer_win", 0)
+        else:
+            seen[name] = dict(p)
+    return list(seen.values())
+
+
 def save_one_result(uploaded_file, result, edited_players, game_date, game_time, player_id_map):
+    edited_players = merge_duplicate_players(edited_players)
     for p in edited_players:
         if p["name"] not in player_id_map:
             new_id = add_player(p["name"])
@@ -204,26 +224,56 @@ recognizing_items = [i for i in items if i["status"] == "recognizing"]
 status_box = st.empty()
 
 if recognizing_items:
-    item = recognizing_items[0]
-    uf = file_map.get(item["file_name"])
-    if uf:
-        status_box.info(f"🤖 正在识别: {item['file_name']} ...")
-        try:
-            image = Image.open(uf)
-            result = recognize_bill(
-                image,
-                api_key=st.session_state.get("api_key", DEFAULT_KEY),
-                base_url=st.session_state.get("base_url", DEFAULT_URL),
-                model=st.session_state.get("model", DEFAULT_MODEL),
-            )
-            item["result"] = result
-            item["fn_date"], item["fn_time"] = parse_filename_datetime(uf.name)
-            item["status"] = "done"
-        except Exception as e:
-            item["error"] = str(e)
+    config = get_config()
+    items_to_process = list(recognizing_items)
+    status_box.info(f"🤖 正在并发识别 {len(items_to_process)} 张截图...")
+
+    # 获取已有玩家列表，注入提示词帮助精准匹配昵称
+    player_names = [p["name"] for p in get_all_players()]
+
+    # 在主线程预读取文件数据，避免线程安全问题
+    file_data = []
+    for item in items_to_process:
+        uf = file_map.get(item["file_name"])
+        if uf:
+            file_data.append((item, uf.read()))
+            uf.seek(0)
+        else:
+            item["error"] = "文件未找到"
             item["status"] = "error"
-        status_box.empty()
-        st.rerun()
+
+    def recognize_one(item, buf):
+        image = Image.open(BytesIO(buf))
+        result = recognize_bill(
+            image,
+            api_key=config["api_key"],
+            base_url=config["base_url"],
+            model=config["model"],
+            player_names=player_names,
+        )
+        fn_date, fn_time = parse_filename_datetime(item["file_name"])
+        return item, result, fn_date, fn_time
+
+    with ThreadPoolExecutor(max_workers=min(len(file_data), 5)) as executor:
+        future_to_item = {}
+        for item, buf in file_data:
+            future = executor.submit(recognize_one, item, buf)
+            future_to_item[future] = item
+
+        for future in as_completed(future_to_item):
+            item = future_to_item[future]
+            try:
+                _, result, fn_date, fn_time = future.result()
+                item["result"] = result
+                item["fn_date"] = fn_date
+                item["fn_time"] = fn_time
+                item["status"] = "done"
+            except Exception as e:
+                item["error"] = str(e)
+                item["status"] = "error"
+
+    status_box.empty()
+    st.rerun()
 
 # ========== UI 渲染（始终渲染，不受识别阻塞）==========
 
@@ -327,11 +377,12 @@ for idx, item in enumerate(items):
                 p["name"] = actual_name
 
         if st.button("💾 保存此条", key=f"save_{idx}", type="primary"):
-            is_valid, total = validate_session_zero(result["players"])
+            merged = merge_duplicate_players(result["players"])
+            is_valid, total = validate_session_zero(merged)
             if not is_valid:
                 st.error(f"❌ 总分必须为 0，当前为 {total:+.0f}分，请检查。")
             else:
-                save_one_result(uf, result, result["players"], game_date, game_time, player_id_map)
+                save_one_result(uf, result, merged, game_date, game_time, player_id_map)
                 item["status"] = "saved"
                 st.success(f"✅ {uf.name} 已保存")
                 st.rerun()
@@ -369,12 +420,13 @@ if unsaved:
                 nn = st.session_state.get(f"nn_{idx}_{pi}", "")
                 if nn:
                     p["name"] = nn
-            is_valid, total = validate_session_zero(result["players"])
+            merged = merge_duplicate_players(result["players"])
+            is_valid, total = validate_session_zero(merged)
             if not is_valid:
                 st.error(f"❌ 第 {idx+1} 张 ({item['file_name']}) 总分不为 0: {total:+.0f}分，请先修正。")
                 has_error = True
             else:
-                to_save.append((uf, result, result["players"], gd, gt))
+                to_save.append((uf, result, merged, gd, gt))
 
         if not has_error:
             saved_count = 0

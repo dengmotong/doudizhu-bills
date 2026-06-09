@@ -19,6 +19,7 @@ def recognize_bill(
     api_key: str = "",
     base_url: str = "",
     model: str = "",
+    player_names: list[str] | None = None,
 ) -> dict:
     """
     使用 OpenAI 兼容 API（如 Mimo）识别斗地主结算截图。
@@ -28,6 +29,7 @@ def recognize_bill(
         api_key: API Key（为空则使用 config 中的默认值）
         base_url: API 地址（为空则使用 config 中的默认值）
         model: 模型名（为空则使用 config 中的默认值）
+        player_names: 已知玩家昵称列表，帮助 LLM 精准匹配现有用户
 
     返回:
         {
@@ -112,6 +114,17 @@ def recognize_bill(
 - 如果截图中有日期请使用截图中的日期，没有则使用今天的日期
 - 如果截图中有时间请使用截图中的时间，没有则留空字符串"""
 
+    if player_names:
+        prompt += f"""
+
+=== 已知玩家列表（请优先匹配） ===
+以下是在系统中已有的玩家昵称列表：
+{", ".join(player_names)}
+
+截图中的玩家昵称应优先匹配到这些已知昵称。
+如果截图中的昵称与列表中某个昵称高度相似，请使用列表中精确的昵称，不要创建新的变体。
+特别注意以下容易混淆的字符：短横线 -、中文破折号 —、汉字"一"、下划线 _ 等。"""
+
     try:
         response = client.chat.completions.create(
             model=mdl,
@@ -174,6 +187,10 @@ def recognize_bill(
     # 验证结构
     if "game_date" not in result or "players" not in result:
         raise ValueError("识别结果格式不正确，缺少必要字段")
+
+    # 去除玩家名字首尾空白
+    for p in result["players"]:
+        p["name"] = p.get("name", "").strip()
 
     # 确保每个 player 都有地主/农民字段
     for p in result["players"]:
