@@ -1,10 +1,11 @@
+"""OpenAI 兼容 API 图像识别（Mimo 等）：识别斗地主结算截图并返回结构化 JSON。"""
 import base64
 import json
 from io import BytesIO
 
 from PIL import Image
 
-from config import OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL
+from .config import OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL
 
 
 def encode_image_base64(image: Image.Image) -> str:
@@ -12,6 +13,66 @@ def encode_image_base64(image: Image.Image) -> str:
     buf = BytesIO()
     image.save(buf, format="JPEG", quality=90)
     return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def _to_rate(value, default: float | None = None) -> float | None:
+    """把 LLM 返回的胜率归一化为 0-100 的百分数。
+
+    兼容 "63%" / "63" / 0.63 三种写法；无法解析时返回 default。
+    """
+    if value is None:
+        return default
+    if isinstance(value, str):
+        value = value.strip().rstrip("%").strip()
+    try:
+        rate = float(value)
+    except (TypeError, ValueError):
+        return default
+    if rate < 0:
+        return default
+    # 0-1 之间视为小数比例（如 0.63），但 0 与 1 存在歧义：
+    # 胜率 1 表示 100% 更常见，而 1% 的胜率极罕见，故 1 按 100% 处理。
+    if 0 < rate <= 1:
+        rate *= 100
+    return min(rate, 100.0)
+
+
+def _to_count(value) -> int:
+    try:
+        return max(int(round(float(value))), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def apply_win_rates(result: dict) -> dict:
+    """用「盘数 × 胜率」在本地计算胜负盘数，不信任 LLM 直接给出的赢次。
+
+    这样胜负盘数由程序运算，避免模型在算术上出错；
+    同时把推导出的胜率回填到结果里，便于前端展示与核对。
+    """
+    for p in result.get("players", []):
+        landlord_count = _to_count(p.get("landlord_count"))
+        farmer_count = _to_count(p.get("farmer_count"))
+        p["landlord_count"] = landlord_count
+        p["farmer_count"] = farmer_count
+
+        l_rate = _to_rate(p.get("landlord_rate"))
+        f_rate = _to_rate(p.get("farmer_rate"))
+
+        if l_rate is None:
+            # 兼容：模型仍返回赢次时，反推胜率；否则视为 0
+            l_rate = (p["landlord_win"] / landlord_count * 100) if landlord_count and p.get("landlord_win") else 0.0
+        if f_rate is None:
+            f_rate = (p["farmer_win"] / farmer_count * 100) if farmer_count and p.get("farmer_win") else 0.0
+
+        p["landlord_rate"] = round(l_rate, 1)
+        p["farmer_rate"] = round(f_rate, 1)
+
+        # 胜负盘数一律由程序计算，并夹在 [0, 盘数] 区间内
+        p["landlord_win"] = min(landlord_count, int(round(landlord_count * l_rate / 100)))
+        p["farmer_win"] = min(farmer_count, int(round(farmer_count * f_rate / 100)))
+
+    return result
 
 
 def recognize_bill(
@@ -36,17 +97,15 @@ def recognize_bill(
             "game_date": "2024-01-15",
             "game_time": "14:30",
             "players": [
-                {
-                    "name": "玩家昵称",
-                    "win_points": 5.0,
-                    "landlord_count": 2,
-                    "landlord_win": 1,
-                    "farmer_count": 1,
-                    "farmer_win": 1
-                },
-                ...
+                {"name": "玩家昵称", "win_points": 5.0,
+                 "landlord_count": 2, "landlord_rate": 50.0, "landlord_win": 1,
+                 "farmer_count": 1, "farmer_rate": 100.0, "farmer_win": 1}, ...
             ]
         }
+
+    说明:
+        LLM 只负责「看」——识别盘数与胜率；胜负盘数由 apply_win_rates()
+        在本地用「盘数 × 胜率」计算，避免模型算术出错。
     """
     key = api_key or OPENAI_API_KEY
     url = base_url or OPENAI_BASE_URL
@@ -84,9 +143,9 @@ def recognize_bill(
             "name": "玩家昵称",
             "win_points": 5.0,
             "landlord_count": 2,
-            "landlord_win": 1,
+            "landlord_rate": 50.0,
             "farmer_count": 1,
-            "farmer_win": 1
+            "farmer_rate": 100.0
         }
     ]
 }
@@ -106,13 +165,17 @@ def recognize_bill(
 
 === 字段说明 ===
 - win_points: 每个玩家的输赢分数（不是金额），赢为正数，输为负数，用数字
-- landlord_count: 该玩家当本地主的次数（没有显示则填 0）
-- landlord_win: 该玩家当本地主赢的次数
-- farmer_count: 该玩家当农民的次数
-- farmer_win: 该玩家当农民赢的次数
+- landlord_count: 该玩家当本地主的盘数（没有显示则填 0）
+- landlord_rate: 该玩家当本地主的胜率，用百分数数字表示（例如 63% 填 63，不要填赢的盘数）
+- farmer_count: 该玩家当农民的盘数
+- farmer_rate: 该玩家当农民的胜率，用百分数数字表示（例如 40% 填 40）
 - 如果截图中没有地主/农民的详细数据，这四个字段都填 0
 - 如果截图中有日期请使用截图中的日期，没有则使用今天的日期
-- 如果截图中有时间请使用截图中的时间，没有则留空字符串"""
+- 如果截图中有时间请使用截图中的时间，没有则留空字符串
+
+=== 重要：只识别，不要做算术 ===
+- 请只忠实抄录截图上的「盘数」和「胜率」，不要自行计算赢的盘数，也不要输出 landlord_win / farmer_win 字段。
+- 胜率请直接抄录截图显示的数字；如果截图只显示赢的盘数而没有胜率，请留空或填 0，不要换算。"""
 
     if player_names:
         prompt += f"""
@@ -170,7 +233,6 @@ def recognize_bill(
     content = response.choices[0].message.content
 
     if not content:
-        # 打印完整响应用于调试
         raise RuntimeError(
             f"API 返回内容为空，响应: {response.model_dump_json(indent=2)}"
         )
@@ -195,10 +257,11 @@ def recognize_bill(
     # 确保每个 player 都有地主/农民字段
     for p in result["players"]:
         p.setdefault("landlord_count", 0)
-        p.setdefault("landlord_win", 0)
         p.setdefault("farmer_count", 0)
-        p.setdefault("farmer_win", 0)
 
     result.setdefault("game_time", "")
+
+    # 胜负盘数由程序计算，不用模型给的结果
+    apply_win_rates(result)
 
     return result

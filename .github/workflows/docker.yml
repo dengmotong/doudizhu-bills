@@ -33,9 +33,13 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # 发版时同步这里的版本号（与 pyproject.toml / backend/main.py /
+          # frontend/package.json 保持一致）；打 vX.Y.Z 标签时 semver 会额外生成同名镜像标签
           tags: |
             type=sha
             type=raw,value=latest
+            type=raw,value=3.0.0,enable=${{ github.ref == 'refs/heads/master' }}
+            type=semver,pattern={{version}}
 
       - name: Build and push
         uses: docker/build-push-action@v6

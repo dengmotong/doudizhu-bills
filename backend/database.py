@@ -1,8 +1,14 @@
+"""数据库层 — SQLite CRUD + 统计查询。
+
+- SQLite WAL 模式。
+- 每个函数独立打开/关闭连接，绝不跨函数共享连接。
+- schema 与旧版 Streamlit 版本保持兼容，可直接沿用已有 bills.db 数据。
+"""
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from config import DB_PATH
+from .config import DB_PATH
 
 
 def get_connection() -> sqlite3.Connection:
@@ -63,7 +69,6 @@ def _migrate(conn: sqlite3.Connection):
         "ALTER TABLE game_sessions ADD COLUMN settled INTEGER DEFAULT 0",
         "ALTER TABLE game_sessions ADD COLUMN settled_at TEXT DEFAULT ''",
         "ALTER TABLE game_sessions ADD COLUMN price_per_point REAL DEFAULT 5.0",
-        # 旧 bills 的 win_amount → win_points（重命名思路）
         "ALTER TABLE bills ADD COLUMN win_points REAL NOT NULL DEFAULT 0",
         "ALTER TABLE bills ADD COLUMN game_session_id INTEGER",
         "ALTER TABLE bills ADD COLUMN landlord_count INTEGER DEFAULT 0",
@@ -169,6 +174,13 @@ def unsettle_game_session(session_id: int):
     )
     conn.commit()
     conn.close()
+
+
+def get_session(session_id: int) -> dict | None:
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM game_sessions WHERE id = ?", (session_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def get_session_bills(session_id: int) -> list[dict]:

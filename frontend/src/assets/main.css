@@ -1,0 +1,58 @@
+:root {
+  --dzz-radius: 10px;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: 'Lato', 'PingFang SC', 'Microsoft YaHei', -apple-system, sans-serif;
+}
+
+#app {
+  height: 100vh;
+}
+
+/* 细滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.25);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.4);
+}
+
+/* 数字字体 */
+.mono,
+.n-statistic-value__content {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 渐入过渡 */
+.fade-in-enter-active {
+  transition: opacity 0.25s ease;
+}
+.fade-in-enter-from {
+  opacity: 0;
+}
+
+.rank-col {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 700;
+}
+
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

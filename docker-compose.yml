@@ -3,11 +3,11 @@ services:
     build: .
     container_name: doudizhu-bills
     ports:
-      - "${STREAMLIT_PORT:-8501}:8501"
+      - "${APP_PORT:-8000}:8000"
     volumes:
       - ./data:/app/data
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.xiaomimimo.com/v1}
-      - OPENAI_MODEL=${OPENAI_MODEL:-mimo-v2-omni}
+      - OPENAI_MODEL=${OPENAI_MODEL:-mimo-v2.5}
     restart: unless-stopped

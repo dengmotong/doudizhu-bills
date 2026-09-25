@@ -1,14 +1,17 @@
 [project]
 name = "doudizhu-bills"
-version = "1.0.0"
-description = "Add your description here"
+version = "3.0.0"
+description = "斗地主对局账单管理系统 — Vue 3 + Vite 前端 + FastAPI 后端（单进程统一服务）"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.9",
     "openai>=1.0.0",
-    "pandas>=3.0.3",
     "pillow>=12.2.0",
-    "plotly>=6.7.0",
     "python-dotenv>=1.2.2",
-    "streamlit>=1.57.0",
 ]
+
+[tool.uv]
+package = false

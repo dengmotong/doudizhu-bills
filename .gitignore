@@ -15,9 +15,11 @@ wheels/
 # 打包产物
 *.tar
 
-# 数据文件（本地数据库、图片等）
+# 数据文件（本地数据库、对局截图等）
+# 注意：data.bak/ 是 data/ 的备份，同样含数据库与截图，必须一并忽略
 data/*.db
 data/images/
+data.bak/
 
 # Streamlit
 .streamlit/secrets.toml
