@@ -2,6 +2,9 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useMessage } from 'naive-ui'
 import { fetchPlayers, imageUrl, recognize, saveSessionBatch } from '@/api'
+import { useIsMobile } from '@/composables/useIsMobile'
+
+const { isMobile } = useIsMobile()
 
 const message = useMessage()
 
@@ -241,18 +244,18 @@ onMounted(async () => {
     <!-- API 配置 -->
     <n-collapse style="margin-top: 16px">
       <n-collapse-item title="🧠 API 配置（OpenAI 兼容 / Mimo）">
-        <n-grid :cols="3" :x-gap="12" responsive="screen" item-responsive>
-          <n-grid-item :span="1" :xs="3">
+        <n-grid :cols="isMobile ? 1 : 3" :x-gap="12">
+          <n-grid-item>
             <n-form-item label="API Key" :show-feedback="false">
               <n-input v-model:value="config.api_key" type="password" show-password-on="click" placeholder="sk-..." />
             </n-form-item>
           </n-grid-item>
-          <n-grid-item :span="1" :xs="3">
+          <n-grid-item>
             <n-form-item label="Base URL" :show-feedback="false">
               <n-input v-model:value="config.base_url" placeholder="https://api.xiaomimimo.com/v1" />
             </n-form-item>
           </n-grid-item>
-          <n-grid-item :span="1" :xs="3">
+          <n-grid-item>
             <n-form-item label="模型" :show-feedback="false">
               <n-input v-model:value="config.model" placeholder="mimo-v2.5" />
             </n-form-item>
@@ -323,8 +326,8 @@ onMounted(async () => {
 
             <!-- 编辑区 -->
             <template v-else-if="item.status === 'done'">
-              <n-grid :cols="3" :x-gap="10" item-responsive responsive="screen">
-                <n-grid-item :span="1" :xs="3">
+              <n-grid :cols="isMobile ? 1 : 3" :x-gap="10">
+                <n-grid-item>
                   <n-form-item label="游戏日期" :show-feedback="false" label-placement="top" style="margin-bottom: 10px">
                     <n-date-picker
                       v-model:value="item.game_date"
@@ -335,12 +338,12 @@ onMounted(async () => {
                     />
                   </n-form-item>
                 </n-grid-item>
-                <n-grid-item :span="1" :xs="3">
+                <n-grid-item>
                   <n-form-item label="游戏时间" :show-feedback="false" label-placement="top" style="margin-bottom: 10px">
                     <n-input v-model:value="item.game_time" placeholder="HH:MM" clearable />
                   </n-form-item>
                 </n-grid-item>
-                <n-grid-item :span="1" :xs="3">
+                <n-grid-item>
                   <n-form-item label="总分" :show-feedback="false" label-placement="top" style="margin-bottom: 10px">
                     <n-input-number
                       :value="totalOf(item)"
@@ -360,9 +363,9 @@ onMounted(async () => {
                   :options="existingPlayers.map((e) => ({ value: e.name, label: e.name })).filter((o) => o.value !== p.name)"
                   :input-props="{ placeholder: '玩家昵称' }"
                   size="small"
-                  style="flex: 1; min-width: 120px"
+                  class="pr-name"
                 />
-                <n-input-number v-model:value="p.win_points" size="small" :step="1" style="width: 130px">
+                <n-input-number v-model:value="p.win_points" size="small" :step="1" class="pr-score">
                   <template #prefix>分数</template>
                 </n-input-number>
                 <n-button text size="small" type="error" @click="item.players.splice(pi, 1)">移除</n-button>
@@ -476,7 +479,7 @@ onMounted(async () => {
       :show="previewIndex !== null"
       preset="card"
       title="🔍 放大核对（左图右数据）"
-      style="width: 96vw; max-width: 1600px"
+      :style="isMobile ? 'width: 100vw; max-width: 100vw' : 'width: 96vw; max-width: 1600px'"
       :bordered="false"
       @update:show="(v) => !v && (previewIndex = null)"
     >
@@ -539,7 +542,8 @@ onMounted(async () => {
                 </div>
               </div>
 
-              <div class="pv-table">
+              <!-- 桌面端：六列表格，一屏对照 -->
+              <div v-if="!isMobile" class="pv-table">
                 <div class="pv-tr pv-th">
                   <span class="pv-name">玩家</span>
                   <span class="pv-score">得分</span>
@@ -563,6 +567,40 @@ onMounted(async () => {
                     <n-input-number v-model:value="p.farmer_rate" size="tiny" :min="0" :max="100" class="pv-num" @update:value="syncWins(previewTarget)" />
                   </span>
                   <span class="pv-win pv-calc">{{ p.farmer_win }}</span>
+                </div>
+              </div>
+
+              <!-- 移动端：每位玩家一块，地主/农民各一行，字段有完整标签，无需横向滑动 -->
+              <div v-else class="pv-cards">
+                <div v-for="(p, pi) in previewTarget.players" :key="pi" class="pv-card">
+                  <div class="pv-card-head">
+                    <span class="pv-card-name">{{ p.name }}</span>
+                    <n-input-number v-model:value="p.win_points" size="tiny" :step="1" class="pv-card-score">
+                      <template #prefix>得分</template>
+                    </n-input-number>
+                  </div>
+
+                  <div class="pv-card-line">
+                    <span class="adv-role adv-role-landlord">地主</span>
+                    <n-input-number v-model:value="p.landlord_count" size="tiny" :min="0" class="pv-card-num" @update:value="syncWins(previewTarget)">
+                      <template #suffix>盘</template>
+                    </n-input-number>
+                    <n-input-number v-model:value="p.landlord_rate" size="tiny" :min="0" :max="100" class="pv-card-num" @update:value="syncWins(previewTarget)">
+                      <template #suffix>%</template>
+                    </n-input-number>
+                    <span class="pv-card-win">胜 <b>{{ p.landlord_win }}</b> 盘</span>
+                  </div>
+
+                  <div class="pv-card-line">
+                    <span class="adv-role adv-role-farmer">农民</span>
+                    <n-input-number v-model:value="p.farmer_count" size="tiny" :min="0" class="pv-card-num" @update:value="syncWins(previewTarget)">
+                      <template #suffix>盘</template>
+                    </n-input-number>
+                    <n-input-number v-model:value="p.farmer_rate" size="tiny" :min="0" :max="100" class="pv-card-num" @update:value="syncWins(previewTarget)">
+                      <template #suffix>%</template>
+                    </n-input-number>
+                    <span class="pv-card-win">胜 <b>{{ p.farmer_win }}</b> 盘</span>
+                  </div>
                 </div>
               </div>
 
@@ -854,20 +892,139 @@ onMounted(async () => {
   padding-top: 8px;
   border-top: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.2));
 }
-@media (max-width: 900px) {
-  .pv-body {
-    flex-direction: column;
-  }
-  .pv-image-col,
-  .pv-data-col {
-    flex: 1 1 100%;
-    max-height: 50vh;
-  }
-}
 .action-bar {
   margin-top: 18px;
   padding: 14px;
   border-radius: 12px;
   background: var(--n-color, rgba(128, 128, 128, 0.06));
+}
+
+/* ---- 移动端适配 ---- */
+@media (max-width: 768px) {
+  /* 卡片列表：单列，去掉 420px 的最小宽度限制 */
+  .upload-cards {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  /* 关键：卡片默认 min-width:auto，会被超长文件名（不换行）撑到 800px+，
+     导致栅格列被拉宽、整页横向溢出。这里显式允许收缩。 */
+  .upload-card {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .card-file {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .card-header {
+    min-width: 0;
+  }
+  /* 缩略图与数据不再并排，改为上下排列，数据区拿到整行宽度 */
+  .card-body {
+    flex-direction: column;
+  }
+  .card-img {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+  .thumb {
+    height: 72px;
+    width: 72px;
+  }
+  /* 玩家行：昵称占满一行，分数与移除按钮另起一行 */
+  .player-row {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .pr-name {
+    flex: 1 1 100%;
+  }
+  .pr-score {
+    flex: 1 1 auto;
+    width: auto !important;
+  }
+  /* 操作栏按钮占满整行，便于拇指点击 */
+  .action-bar .n-space {
+    width: 100%;
+  }
+  .action-bar .n-button {
+    width: 100%;
+  }
+  /* 放大核对弹窗：上下排布，图片占约半屏 */
+  .pv-body {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .pv-image-col,
+  .pv-data-col {
+    flex: 1 1 100%;
+    max-height: none;
+  }
+  .pv-image-scroll {
+    max-height: 42vh;
+  }
+  .pv-data-col {
+    max-height: none;
+  }
+  .pv-img {
+    max-height: 40vh;
+  }
+  /* 移动端数据区：每位玩家一块，两行（地主 / 农民），字段标签完整、无需横向滑动 */
+  .pv-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .pv-card {
+    border: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.18));
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: var(--n-color, rgba(128, 128, 128, 0.04));
+  }
+  .pv-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .pv-card-name {
+    font-weight: 700;
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pv-card-score {
+    width: 108px;
+    flex-shrink: 0;
+  }
+  .pv-card-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .pv-card-num {
+    width: 96px;
+    flex-shrink: 0;
+  }
+  .pv-card-win {
+    font-size: 12px;
+    color: #606266;
+    white-space: nowrap;
+  }
+  .pv-card-win b {
+    color: #18a058;
+    font-size: 14px;
+  }
+  .pv-picker .n-radio-group {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+  }
 }
 </style>

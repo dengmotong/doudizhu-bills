@@ -2,6 +2,9 @@
 import { onMounted, ref } from 'vue'
 import { useMessage } from 'naive-ui'
 import { createPlayer, deletePlayer, fetchPlayers, renamePlayer } from '@/api'
+import { useIsMobile } from '@/composables/useIsMobile'
+
+const { isMobile, isTablet } = useIsMobile()
 
 const message = useMessage()
 const players = ref([])
@@ -68,23 +71,23 @@ onMounted(refresh)
     <n-p style="color: #909399; margin-top: 4px">新增、重命名、删除玩家。</n-p>
 
     <n-card :bordered="true" size="small" style="margin-top: 16px">
-      <n-space align="center">
+      <div class="add-row">
         <n-input
           v-model:value="newName"
           placeholder="输入玩家昵称"
-          style="max-width: 320px"
+          class="add-input"
           @keyup.enter="add"
         >
           <template #prefix>🃏</template>
         </n-input>
         <n-button type="primary" :loading="adding" @click="add">添加</n-button>
-      </n-space>
+      </div>
     </n-card>
 
     <n-spin :show="loading">
       <n-empty v-if="!players.length" description="暂无玩家，请先添加" style="margin-top: 60px" />
-      <n-grid :cols="3" :x-gap="14" :y-gap="14" responsive="screen" item-responsive style="margin-top: 16px">
-        <n-grid-item v-for="p in players" :key="p.id" :span="1" :xs="2" :m="2" :s="3">
+      <n-grid :cols="isMobile ? 1 : isTablet ? 2 : 3" :x-gap="14" :y-gap="14" style="margin-top: 16px">
+        <n-grid-item v-for="p in players" :key="p.id">
           <n-card size="small" :bordered="true" class="player-card">
             <div class="player-head">
               <span class="player-avatar">{{ p.name.slice(0, 1) }}</span>
@@ -99,7 +102,7 @@ onMounted(refresh)
                 确认删除玩家「{{ p.name }}」及其所有账单？
               </n-popconfirm>
             </div>
-            <n-space style="margin-top: 10px" align="center">
+            <n-space style="margin-top: 10px" align="center" class="rename-row">
               <n-input v-model:value="p.name" size="small" placeholder="新昵称">
                 <template #prefix>✏️</template>
               </n-input>
@@ -149,5 +152,38 @@ onMounted(refresh)
 .player-id {
   font-size: 12px;
   color: #909399;
+}
+
+/* 添加玩家：输入框占满可用宽度，手机上按钮换行 */
+.add-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.add-input {
+  flex: 1 1 220px;
+  max-width: 320px;
+}
+
+/* ---- 移动端适配 ---- */
+@media (max-width: 768px) {
+  .add-row {
+    gap: 8px;
+  }
+  .add-input {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+  .add-row .n-button {
+    flex: 1 1 100%;
+  }
+  .rename-row {
+    width: 100%;
+  }
+  .rename-row .n-input {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
 }
 </style>

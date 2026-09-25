@@ -1,5 +1,5 @@
 <script setup>
-import { computed, h, ref } from 'vue'
+import { computed, h, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   BarChartOutline,
@@ -7,18 +7,27 @@ import {
   CloudUploadOutline,
   HomeOutline,
   ListOutline,
+  MenuOutline,
   MoonOutline,
   PeopleOutline,
   SunnyOutline,
 } from '@vicons/ionicons5'
 import { NIcon } from 'naive-ui'
 import { useTheme } from '@/composables/useTheme'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const route = useRoute()
 const router = useRouter()
 const { isDark, toggleDark, theme, themeOverrides, locale, dateLocale } = useTheme()
+const { isMobile } = useIsMobile()
 
 const collapsed = ref(false)
+const drawerOpen = ref(false)
+
+// 切到桌面端时收起抽屉，避免状态残留
+watch(isMobile, (m) => {
+  if (!m) drawerOpen.value = false
+})
 
 const iconMap = {
   home: HomeOutline,
@@ -58,6 +67,7 @@ const siderBg = computed(() =>
 )
 
 function handleMenuSelect(key) {
+  drawerOpen.value = false
   if (key !== route.path) router.push(key)
 }
 </script>
@@ -73,7 +83,9 @@ function handleMenuSelect(key) {
       <n-dialog-provider>
         <n-notification-provider>
           <n-layout has-sider position="absolute" style="height: 100vh">
+            <!-- 桌面端：常驻侧栏 -->
             <n-layout-sider
+              v-if="!isMobile"
               bordered
               collapse-mode="width"
               :collapsed-width="64"
@@ -101,6 +113,20 @@ function handleMenuSelect(key) {
 
             <n-layout :native-scrollbar="false" style="height: 100vh">
               <n-layout-header bordered class="app-header">
+                <!-- 移动端：汉堡菜单唤起抽屉导航 -->
+                <n-button
+                  v-if="isMobile"
+                  quaternary
+                  circle
+                  class="header-menu-btn"
+                  aria-label="打开导航菜单"
+                  @click="drawerOpen = true"
+                >
+                  <template #icon>
+                    <n-icon :component="MenuOutline" />
+                  </template>
+                </n-button>
+
                 <div class="header-title">{{ currentTitle }}</div>
                 <div class="header-actions">
                   <n-tooltip>
@@ -116,7 +142,10 @@ function handleMenuSelect(key) {
                 </div>
               </n-layout-header>
 
-              <n-layout-content :native-scrollbar="false" content-style="padding: 22px 24px 40px;">
+              <n-layout-content
+                :native-scrollbar="false"
+                :content-style="isMobile ? 'padding: 12px 12px 32px;' : 'padding: 22px 24px 40px;'"
+              >
                 <router-view v-slot="{ Component }">
                   <transition name="fade-in" mode="out-in">
                     <component :is="Component" />
@@ -124,6 +153,22 @@ function handleMenuSelect(key) {
                 </router-view>
               </n-layout-content>
             </n-layout>
+
+            <!-- 移动端抽屉导航 -->
+            <n-drawer v-model:show="drawerOpen" :width="260" placement="left">
+              <n-drawer-content :native-scrollbar="false" body-content-style="padding: 0;">
+                <div class="drawer-logo">
+                  <span class="logo-emoji">🃏</span>
+                  <span class="logo-text">斗地主账单</span>
+                </div>
+                <n-menu
+                  :value="activeKey"
+                  :options="menuOptions"
+                  :indent="20"
+                  @update:value="handleMenuSelect"
+                />
+              </n-drawer-content>
+            </n-drawer>
           </n-layout>
         </n-notification-provider>
       </n-dialog-provider>
@@ -170,5 +215,40 @@ function handleMenuSelect(key) {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.drawer-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 56px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--n-border-color, rgba(128, 128, 128, 0.16));
+}
+.header-menu-btn {
+  margin-right: 4px;
+}
+
+/* ---- 移动端适配 ---- */
+@media (max-width: 768px) {
+  .app-header {
+    /* 固定 52px 内容区 + 刘海屏安全区 */
+    height: calc(52px + env(safe-area-inset-top, 0px));
+    padding: 0 12px;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .header-title {
+    font-size: 16px;
+    /* 让标题在汉堡按钮与主题按钮之间居中，过长时省略 */
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 8px;
+  }
+  .drawer-logo {
+    padding-top: env(safe-area-inset-top, 0);
+    height: calc(56px + env(safe-area-inset-top, 0px));
+  }
 }
 </style>

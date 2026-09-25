@@ -4,6 +4,9 @@ import VChart from 'vue-echarts'
 import { fetchBills, fetchCumulativeStats, fetchPlayers, fetchSessions } from '@/api'
 import StatCard from '@/components/StatCard.vue'
 import WinLossPill from '@/components/WinLossPill.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
+
+const { isMobile, isTablet, isNarrow } = useIsMobile()
 
 const players = ref([])
 const bills = ref([])
@@ -21,13 +24,18 @@ const medal = (i) => (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `
 
 const barOption = computed(() => ({
   tooltip: { trigger: 'axis' },
-  grid: { left: 44, right: 20, top: 30, bottom: 40 },
+  grid: isMobile.value
+    ? { left: 34, right: 8, top: 26, bottom: 34, containLabel: true }
+    : { left: 44, right: 20, top: 30, bottom: 40 },
   xAxis: {
     type: 'category',
     data: stats.value.map((s) => s.player_name),
-    axisLabel: { interval: 0, rotate: 22 },
+    // 手机上名字较长时省略，避免标签互相重叠
+    axisLabel: isMobile.value
+      ? { interval: 0, rotate: 30, fontSize: 10, formatter: (v) => (v.length > 4 ? `${v.slice(0, 4)}…` : v) }
+      : { interval: 0, rotate: 22 },
   },
-  yAxis: { type: 'value', name: '累计分数' },
+  yAxis: { type: 'value', name: isMobile.value ? '' : '累计分数' },
   series: [
     {
       type: 'bar',
@@ -71,23 +79,23 @@ onMounted(load)
     <n-p style="color: #909399; margin-top: 4px">上传结算截图、跟踪分数、一键结账。</n-p>
 
     <n-spin :show="loading">
-      <n-grid :cols="4" :x-gap="14" :y-gap="14" responsive="screen" item-responsive style="margin-top: 16px">
-        <n-grid-item :span="1" :m="2" :s="4" :xs="2">
+      <n-grid :cols="isMobile ? 2 : isTablet ? 2 : 4" :x-gap="14" :y-gap="14" style="margin-top: 16px">
+        <n-grid-item>
           <StatCard title="玩家总数" :value="playerCount" icon="👥" color="#18a058" />
         </n-grid-item>
-        <n-grid-item :span="1" :m="2" :s="4" :xs="2">
+        <n-grid-item>
           <StatCard title="账单总数" :value="billCount" icon="📋" color="#2080f0" />
         </n-grid-item>
-        <n-grid-item :span="1" :m="2" :s="4" :xs="2">
+        <n-grid-item>
           <StatCard title="总分数" :value="totalScore.toFixed(0)" :suffix="totalScore >= 0 ? '分' : '分'" icon="🎯" color="#f0a020" />
         </n-grid-item>
-        <n-grid-item :span="1" :m="2" :s="4" :xs="2">
+        <n-grid-item>
           <StatCard title="待结账对局" :value="unsettledCount" icon="💰" color="#d03050" />
         </n-grid-item>
       </n-grid>
 
-      <n-grid :cols="2" :x-gap="16" :y-gap="16" responsive="screen" item-responsive style="margin-top: 16px">
-        <n-grid-item :span="1" :s="1" :xs="1">
+      <n-grid :cols="isNarrow ? 1 : 2" :x-gap="16" :y-gap="16" style="margin-top: 16px">
+        <n-grid-item>
           <n-card title="🏆 玩家排名" size="small">
             <template v-if="stats.length">
               <div v-for="(s, i) in stats" :key="s.player_name" class="rank-row">
@@ -117,10 +125,10 @@ onMounted(load)
           </n-card>
         </n-grid-item>
 
-        <n-grid-item :span="1" :s="1" :xs="1">
+        <n-grid-item>
           <n-card title="📈 累计分数对比" size="small">
-            <v-chart v-if="stats.length" :option="barOption" autoresize style="height: 320px" />
-            <n-empty v-else description="暂无图表数据" style="height: 320px" />
+            <v-chart v-if="stats.length" :option="barOption" autoresize :style="{ height: isMobile ? '240px' : '320px' }" />
+            <n-empty v-else description="暂无图表数据" :style="{ height: isMobile ? '240px' : '320px' }" />
           </n-card>
         </n-grid-item>
       </n-grid>
@@ -214,5 +222,25 @@ onMounted(load)
   flex-wrap: wrap;
   gap: 6px;
   justify-content: flex-end;
+}
+
+/* ---- 移动端适配 ---- */
+@media (max-width: 768px) {
+  .recent-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .recent-date {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .recent-players {
+    justify-content: flex-start;
+    width: 100%;
+  }
+  .rank-score {
+    font-size: 13px;
+  }
 }
 </style>

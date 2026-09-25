@@ -3,6 +3,9 @@ import { computed, onMounted, ref } from 'vue'
 import { useMessage } from 'naive-ui'
 import { batchSettle, fetchSessions, settleSingle, unsettleSingle } from '@/api'
 import WinLossPill from '@/components/WinLossPill.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
+
+const { isMobile } = useIsMobile()
 
 const message = useMessage()
 const sessions = ref([])
@@ -151,35 +154,35 @@ onMounted(refresh)
       <template v-else>
         <!-- 待结账 -->
         <n-card :bordered="true" size="small" style="margin-top: 16px" title="⏳ 待结账对局">
-          <n-space align="center" style="margin-bottom: 12px">
+          <div class="settle-actions">
             <n-select
               v-model:value="batchIds"
               multiple
               :options="batchOptions"
               placeholder="选择要合并结账的对局"
               clearable
-              style="min-width: 340px"
+              class="settle-select"
             />
             <n-button size="small" secondary @click="toggleSelectAll">
               {{ batchIds.length && batchIds.length === unsettled.length ? '清空' : '全选' }}
             </n-button>
             <n-input-number v-model:value="ppp" :min="0.1" :step="0.5" size="small" style="width: 140px" footer="每分单价" />
-            <n-button type="success" :loading="working" :disabled="!batchIds.length" @click="doBatchSettle">
+            <n-button type="success" :loading="working" :disabled="!batchIds.length" @click="doBatchSettle" class="settle-submit">
               ✅ 确认批量结账
             </n-button>
-          </n-space>
+          </div>
 
           <template v-if="batchIds.length && batchScores">
             <n-divider style="margin: 8px 0" />
-            <n-grid :cols="2" :x-gap="16" item-responsive responsive="screen">
-              <n-grid-item :span="1" :xs="2">
+            <n-grid :cols="isMobile ? 1 : 2" :x-gap="16">
+              <n-grid-item>
                 <n-text depth="3" size="small" style="font-weight: 700">各玩家总分数</n-text>
                 <div v-for="[name, pts] in sortedScores(batchScores)" :key="name" class="score-line">
                   <span>{{ name }}</span>
                   <WinLossPill :value="pts" :money="Math.round(pts * ppp * 100) / 100" />
                 </div>
               </n-grid-item>
-              <n-grid-item :span="1" :xs="2">
+              <n-grid-item>
                 <n-text depth="3" size="small" style="font-weight: 700">最优转账方案（{{ batchTransfers.length }} 笔）</n-text>
                 <div v-for="(t, i) in batchTransfers" :key="i" class="transfer-line">
                   <span class="transfer-arrow">{{ t.from }} → {{ t.to }}</span>
@@ -205,15 +208,15 @@ onMounted(refresh)
                 <template #header-extra>
                   <n-button size="tiny" type="success" :loading="working" @click.stop="doSettle(s)">✅ 结账</n-button>
                 </template>
-                <n-grid :cols="2" :x-gap="16" item-responsive responsive="screen">
-                  <n-grid-item :span="1" :xs="2">
+                <n-grid :cols="isMobile ? 1 : 2" :x-gap="16">
+                  <n-grid-item>
                     <n-text depth="3" size="small" style="font-weight: 700">各玩家分数</n-text>
                     <div v-for="[name, pts] in sortedScores(sessResult(s).scores)" :key="name" class="score-line">
                       <span>{{ name }}</span>
                       <WinLossPill :value="pts" :money="Math.round(pts * ppp * 100) / 100" />
                     </div>
                   </n-grid-item>
-                  <n-grid-item :span="1" :xs="2">
+                  <n-grid-item>
                     <n-text depth="3" size="small" style="font-weight: 700">转账方案</n-text>
                     <div v-for="(t, i) in sessResult(s).transfers" :key="i" class="transfer-line">
                       <span class="transfer-arrow">{{ t.from }} → {{ t.to }}</span>
@@ -281,5 +284,47 @@ onMounted(refresh)
 }
 .transfer-arrow {
   font-weight: 600;
+}
+
+/* 批量结账操作区：可换行，避免固定宽度把页面撑破 */
+.settle-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.settle-select {
+  flex: 1 1 340px;
+  min-width: 0;
+}
+
+/* ---- 移动端适配 ---- */
+@media (max-width: 768px) {
+  .settle-actions {
+    gap: 8px;
+  }
+  /* 选择器、单价、按钮在手机上各占满一行，操作更清晰 */
+  .settle-select {
+    flex: 1 1 100%;
+  }
+  .settle-actions .n-input-number,
+  .settle-actions .settle-submit {
+    flex: 1 1 100%;
+    width: auto;
+  }
+  .settle-head {
+    flex-wrap: wrap;
+  }
+  .score-line,
+  .transfer-line {
+    gap: 8px;
+    font-size: 13px;
+  }
+  .transfer-arrow {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 </style>

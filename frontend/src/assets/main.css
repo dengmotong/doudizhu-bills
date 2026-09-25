@@ -56,3 +56,39 @@ body {
   align-items: center;
   gap: 10px;
 }
+
+/* ---- 移动端全局规则 ---- */
+@media (max-width: 768px) {
+  /* iOS 上字号小于 16px 的输入框会触发自动放大，统一提升 */
+  input,
+  textarea,
+  select,
+  .n-input__input-el,
+  .n-input__textarea-el {
+    font-size: 16px !important;
+  }
+
+  /* 触屏上滚动更顺滑，并禁掉横向整页滚动 */
+  html,
+  body {
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* 标题在窄屏下适当缩小 */
+  .page-title .n-h2 {
+    font-size: 20px !important;
+  }
+
+  /* 底部安全区（iPhone 手势条），避免内容贴边 */
+  .n-layout-content .n-layout-content-wrapper,
+  .n-layout-content {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  /* 宽表格允许横向滑动，而不是撑破页面 */
+  .n-data-table .n-data-table-base-table-body,
+  .n-data-table .n-data-table-base-table-header {
+    overflow-x: auto;
+  }
+}

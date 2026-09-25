@@ -3,6 +3,9 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useMessage } from 'naive-ui'
 import { deleteBill, deleteSession, fetchPlayers, fetchSessions, imageUrl, updateBill } from '@/api'
 import WinLossPill from '@/components/WinLossPill.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
+
+const { isMobile } = useIsMobile()
 
 const message = useMessage()
 
@@ -152,18 +155,18 @@ onMounted(refresh)
 
     <!-- 筛选 -->
     <n-card :bordered="true" size="small" style="margin-top: 16px">
-      <n-grid :cols="3" :x-gap="12" item-responsive responsive="screen">
-        <n-grid-item :span="1" :xs="3">
+      <n-grid :cols="isMobile ? 1 : 3" :x-gap="12">
+        <n-grid-item>
           <n-form-item label="按玩家筛选" :show-feedback="false">
             <n-select v-model:value="filters.players" multiple :options="playerChoices" clearable placeholder="全部" />
           </n-form-item>
         </n-grid-item>
-        <n-grid-item :span="1" :xs="3">
+        <n-grid-item>
           <n-form-item label="日期范围" :show-feedback="false">
             <n-date-picker v-model:value="filters.dateRange" type="daterange" clearable style="width: 100%" />
           </n-form-item>
         </n-grid-item>
-        <n-grid-item :span="1" :xs="3">
+        <n-grid-item>
           <n-form-item label="排序" :show-feedback="false">
             <n-select v-model:value="filters.sort" :options="[{ label: '最新优先', value: 'newest' }, { label: '最早优先', value: 'oldest' }]" />
           </n-form-item>
@@ -243,15 +246,18 @@ onMounted(refresh)
         <!-- 详情：截图 + 详细信息（点击即展示） -->
         <div v-if="showDetail[s.session.id] && !sessionEdit[s.session.id]" class="detail-area">
           <div v-if="s.session.image_path" style="margin-bottom: 12px">
-            <n-image
-              :src="imageUrl(s.session.image_path)"
-              width="520"
-              object-fit="contain"
-              :show-toolbar="true"
-              style="border-radius: 8px; display: block"
-            />
+            <div class="detail-image-wrap">
+              <n-image
+                :src="imageUrl(s.session.image_path)"
+                width="100%"
+                object-fit="contain"
+                :show-toolbar="true"
+                style="border-radius: 8px; display: block"
+              />
+            </div>
           </div>
 
+          <div class="detail-table-scroll">
           <div class="detail-table">
             <div class="d-row d-head">
               <span class="c-name">玩家</span>
@@ -270,17 +276,18 @@ onMounted(refresh)
               <span class="c-remark">{{ b.remark || '-' }}</span>
             </div>
           </div>
+          </div>
         </div>
 
         <!-- 编辑态：日期(一次) + 整局所有记录 -->
         <div v-if="sessionEdit[s.session.id]" class="edit-area">
-          <n-grid :cols="4" :x-gap="8" item-responsive responsive="screen" style="margin-bottom: 10px">
-            <n-grid-item :span="2" :xs="2">
+          <n-grid :cols="isMobile ? 1 : 2" :x-gap="8" style="margin-bottom: 10px">
+            <n-grid-item>
               <n-form-item label="游戏日期" :show-feedback="false" label-placement="top" style="margin-bottom: 0">
                 <n-date-picker v-model:value="sessionDrafts[s.session.id].date" size="small" type="date" value-format="yyyy-MM-dd" clearable style="width: 100%" />
               </n-form-item>
             </n-grid-item>
-            <n-grid-item :span="2" :xs="2">
+            <n-grid-item>
               <n-form-item label="游戏时间" :show-feedback="false" label-placement="top" style="margin-bottom: 0">
                 <n-input v-model:value="sessionDrafts[s.session.id].time" size="small" placeholder="HH:MM" clearable />
               </n-form-item>
@@ -288,26 +295,24 @@ onMounted(refresh)
           </n-grid>
 
           <div v-for="b in sessionDrafts[s.session.id].bills" :key="b.id" class="edit-row">
-            <n-grid :cols="12" :x-gap="8" item-responsive responsive="screen" :y-gap="6">
-              <n-grid-item :span="3" :xs="12">
+            <n-grid :cols="isMobile ? 4 : 6" :x-gap="8" :y-gap="6">
+              <n-grid-item :span="isMobile ? 4 : 2">
                 <n-select v-model:value="b.player_name" size="small" :options="playerChoices" />
               </n-grid-item>
-              <n-grid-item :span="2" :xs="6">
+              <n-grid-item :span="isMobile ? 4 : 2">
                 <n-input-number v-model:value="b.win_points" size="small" :step="1" style="width: 100%" placeholder="得分" />
               </n-grid-item>
-              <n-grid-item :span="2" :xs="6">
+              <n-grid-item :span="isMobile ? 2 : 1">
                 <n-input-number v-model:value="b.landlord_count" size="small" :min="0" placeholder="地主" style="width: 100%" />
               </n-grid-item>
-              <n-grid-item :span="2" :xs="6">
+              <n-grid-item :span="isMobile ? 2 : 1">
                 <n-input-number v-model:value="b.farmer_count" size="small" :min="0" placeholder="农民" style="width: 100%" />
               </n-grid-item>
-              <n-grid-item :span="2" :xs="8">
-                <n-input v-model:value="b.remark" size="small" placeholder="备注" clearable />
-              </n-grid-item>
-              <n-grid-item :span="1" :xs="4">
-                <n-button size="tiny" type="error" quaternary @click="removeBillRow(s, b)">删除</n-button>
-              </n-grid-item>
             </n-grid>
+            <div class="edit-row-bottom">
+              <n-input v-model:value="b.remark" size="small" placeholder="备注" clearable class="edit-remark" />
+              <n-button size="tiny" type="error" quaternary @click="removeBillRow(s, b)">删除</n-button>
+            </div>
           </div>
           <n-text depth="3" size="small">保存时整局合计必须为 0。</n-text>
         </div>
@@ -415,10 +420,50 @@ onMounted(refresh)
 .edit-row {
   padding: 4px 0;
 }
+.edit-row-bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.edit-remark {
+  flex: 1;
+  min-width: 0;
+}
+.detail-image-wrap {
+  max-width: 520px;
+}
+.detail-table-scroll {
+  overflow-x: auto;
+}
 .green {
   color: #18a058;
 }
 .red {
   color: #d03050;
+}
+
+/* ---- 移动端适配 ---- */
+@media (max-width: 768px) {
+  .sess-header {
+    align-items: flex-start;
+  }
+  .sess-actions {
+    width: 100%;
+  }
+  .score-summary {
+    gap: 10px;
+  }
+  /* 详情表列较多，给一个最小宽度让其横向滚动而不是压扁 */
+  .detail-table {
+    min-width: 520px;
+  }
+  .d-row {
+    font-size: 12px;
+    padding: 7px 10px;
+  }
+  .detail-image-wrap {
+    max-width: none;
+  }
 }
 </style>

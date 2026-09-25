@@ -3,6 +3,9 @@ import { computed, onMounted, ref } from 'vue'
 import VChart from 'vue-echarts'
 import { fetchCumulativeStats, fetchDailyStats, fetchSessionStats } from '@/api'
 import WinLossPill from '@/components/WinLossPill.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
+
+const { isMobile } = useIsMobile()
 
 const loading = ref(true)
 const cumulative = ref([])
@@ -62,14 +65,21 @@ function perPlayerSeries(accum) {
   return out
 }
 
-const baseGrid = { left: 44, right: 20, top: 44, bottom: 44 }
+const baseGrid = computed(() =>
+  isMobile.value
+    ? { left: 34, right: 8, top: 40, bottom: 34, containLabel: true }
+    : { left: 44, right: 20, top: 44, bottom: 44 },
+)
+
+/** 图表在手机上的高度略矮，避免一屏放不下 */
+const chartH = computed(() => (isMobile.value ? 260 : 340))
 
 const trendLine = computed(() => {
   const s = perPlayerSeries(false)
   return {
     tooltip: { trigger: 'axis' },
     legend: { top: 0, type: 'scroll' },
-    grid: baseGrid,
+    grid: baseGrid.value,
     xAxis: { type: 'category', data: trendLabels.value },
     yAxis: { type: 'value', name: '分数' },
     series: trendPlayers.value.map((p) => ({ name: p, type: 'line', smooth: false, data: s[p] })),
@@ -81,7 +91,7 @@ const cumLine = computed(() => {
   return {
     tooltip: { trigger: 'axis' },
     legend: { top: 0, type: 'scroll' },
-    grid: baseGrid,
+    grid: baseGrid.value,
     xAxis: { type: 'category', data: trendLabels.value },
     yAxis: { type: 'value', name: '累计分数' },
     series: trendPlayers.value.map((p) => ({ name: p, type: 'line', smooth: false, data: s[p] })),
@@ -93,7 +103,7 @@ const trendBar = computed(() => {
   return {
     tooltip: { trigger: 'axis' },
     legend: { top: 0, type: 'scroll' },
-    grid: baseGrid,
+    grid: baseGrid.value,
     xAxis: { type: 'category', data: trendLabels.value },
     yAxis: { type: 'value', name: '分数' },
     series: trendPlayers.value.map((p) => ({ name: p, type: 'bar', data: s[p], barMaxWidth: 18 })),
@@ -105,7 +115,7 @@ const periodNet = computed(() => {
   const totals = trendKeys.value.map((_, i) => trendPlayers.value.reduce((sum, p) => sum + (s[p][i] || 0), 0))
   return {
     tooltip: { trigger: 'axis' },
-    grid: baseGrid,
+    grid: baseGrid.value,
     xAxis: { type: 'category', data: trendLabels.value },
     yAxis: { type: 'value', name: '净额' },
     series: [{
@@ -208,12 +218,12 @@ onMounted(load)
         <!-- ===== 累计排名 ===== -->
         <n-card :bordered="true" size="small" style="margin-top: 16px">
           <template #header><span class="section-title">🏆 累计排名</span></template>
-          <n-grid :cols="2" :x-gap="16" :y-gap="16" responsive="screen" item-responsive>
-            <n-grid-item :span="1" :xs="2">
-              <n-card title="累计分数" size="small"><v-chart v-if="cumulative.length" :option="cumBar" autoresize style="height: 340px" /></n-card>
+          <n-grid :cols="isMobile ? 1 : 2" :x-gap="16" :y-gap="16">
+            <n-grid-item>
+              <n-card title="累计分数" size="small"><v-chart v-if="cumulative.length" :option="cumBar" autoresize :style="{ height: chartH + 'px' }" /></n-card>
             </n-grid-item>
-            <n-grid-item :span="1" :xs="2">
-              <n-card title="对局数占比" size="small"><v-chart v-if="cumulative.length" :option="cumPie" autoresize style="height: 340px" /></n-card>
+            <n-grid-item>
+              <n-card title="对局数占比" size="small"><v-chart v-if="cumulative.length" :option="cumPie" autoresize :style="{ height: chartH + 'px' }" /></n-card>
             </n-grid-item>
           </n-grid>
           <n-data-table
@@ -238,6 +248,7 @@ onMounted(load)
             }))"
             size="small"
             striped
+            :scroll-x="isMobile ? 620 : undefined"
             style="margin-top: 16px"
           />
         </n-card>
@@ -245,31 +256,31 @@ onMounted(load)
         <!-- ===== 趋势分析 ===== -->
         <n-card :bordered="true" size="small" style="margin-top: 16px">
           <template #header>
-            <div class="trend-head">
+            <div class="trend-head" :class="{ 'trend-head--mobile': isMobile }">
               <span class="section-title">📈 趋势分析</span>
-              <n-radio-group v-model:value="gran">
+              <n-radio-group v-model:value="gran" :size="isMobile ? 'small' : 'medium'">
                 <n-radio-button v-for="opt in granOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</n-radio-button>
               </n-radio-group>
             </div>
           </template>
           <n-empty v-if="!daily.length" description="暂无趋势数据" style="margin-top: 20px" />
           <template v-else>
-            <n-grid :cols="2" :x-gap="16" :y-gap="16" responsive="screen" item-responsive>
-              <n-grid-item :span="1" :xs="2">
-                <n-card title="各玩家分数趋势" size="small"><v-chart :option="trendLine" autoresize style="height: 340px" /></n-card>
+            <n-grid :cols="isMobile ? 1 : 2" :x-gap="16" :y-gap="16">
+              <n-grid-item>
+                <n-card title="各玩家分数趋势" size="small"><v-chart :option="trendLine" autoresize :style="{ height: chartH + 'px' }" /></n-card>
               </n-grid-item>
-              <n-grid-item :span="1" :xs="2">
-                <n-card title="各玩家累计趋势" size="small"><v-chart :option="cumLine" autoresize style="height: 340px" /></n-card>
+              <n-grid-item>
+                <n-card title="各玩家累计趋势" size="small"><v-chart :option="cumLine" autoresize :style="{ height: chartH + 'px' }" /></n-card>
               </n-grid-item>
-              <n-grid-item :span="1" :xs="2">
-                <n-card title="各玩家分数对比" size="small"><v-chart :option="trendBar" autoresize style="height: 320px" /></n-card>
+              <n-grid-item>
+                <n-card title="各玩家分数对比" size="small"><v-chart :option="trendBar" autoresize :style="{ height: (isMobile ? 240 : 320) + 'px' }" /></n-card>
               </n-grid-item>
-              <n-grid-item :span="1" :xs="2">
-                <n-card title="每期净额（全体合计）" size="small"><v-chart :option="periodNet" autoresize style="height: 320px" /></n-card>
+              <n-grid-item>
+                <n-card title="每期净额（全体合计）" size="small"><v-chart :option="periodNet" autoresize :style="{ height: (isMobile ? 240 : 320) + 'px' }" /></n-card>
               </n-grid-item>
             </n-grid>
             <n-card title="明细汇总" size="small" style="margin-top: 16px">
-              <n-data-table v-if="trendTable.length" :columns="columns" :data="trendTable" size="small" striped />
+              <n-data-table v-if="trendTable.length" :columns="columns" :data="trendTable" size="small" striped :scroll-x="isMobile ? 560 : undefined" />
             </n-card>
           </template>
         </n-card>
@@ -286,8 +297,8 @@ onMounted(load)
                   <n-tag v-if="g.game_time" size="tiny" :bordered="false">{{ g.game_time }}</n-tag>
                 </div>
               </template>
-              <n-grid :cols="2" :x-gap="16" item-responsive responsive="screen">
-                <n-grid-item :span="1" :xs="2">
+              <n-grid :cols="isMobile ? 1 : 2" :x-gap="16">
+                <n-grid-item>
                   <div class="sess-players">
                     <div v-for="r in [...g.rows].sort((a, b) => b.win_points - a.win_points)" :key="r.player_name" class="sess-player">
                       <span>{{ r.player_name }}</span>
@@ -295,9 +306,9 @@ onMounted(load)
                     </div>
                   </div>
                 </n-grid-item>
-                <n-grid-item :span="1" :xs="2">
-                  <v-chart v-if="g.rows.some((r) => r.win_points > 0)" :option="pieFor(g.rows)" autoresize style="height: 220px" />
-                  <n-empty v-else description="本局无赢家" size="small" style="height: 220px" />
+                <n-grid-item>
+                  <v-chart v-if="g.rows.some((r) => r.win_points > 0)" :option="pieFor(g.rows)" autoresize :style="{ height: (isMobile ? 180 : 220) + 'px' }" />
+                  <n-empty v-else description="本局无赢家" size="small" :style="{ height: (isMobile ? 180 : 220) + 'px' }" />
                 </n-grid-item>
               </n-grid>
             </n-collapse-item>
@@ -335,5 +346,27 @@ onMounted(load)
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+/* ---- 移动端适配 ---- */
+@media (max-width: 768px) {
+  .section-title {
+    font-size: 15px;
+  }
+  .trend-head--mobile {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .trend-head--mobile .n-radio-group {
+    display: flex;
+    width: 100%;
+  }
+  .trend-head--mobile .n-radio-group .n-radio-button {
+    flex: 1;
+    text-align: center;
+  }
+  .sess-head {
+    flex-wrap: wrap;
+  }
 }
 </style>
